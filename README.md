@@ -1,4 +1,4 @@
-# antipsychotic-striatum-meta-analysis-
+# antipsychotic-striatum-meta-analysis
 
 A systematic, genome-wide transcriptomic meta-analysis mapping the molecular signatures of typical and atypical antipsychotic medications within the mammalian striatum. 
 
