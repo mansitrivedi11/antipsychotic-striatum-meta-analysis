@@ -18,9 +18,6 @@ The sequential execution flow is structured as follows:
 5. **Statistical Modeling :** Execution of a random-effects meta-analysis model via the `metafor` package to identify significant Differentially Expressed Genes (DEGs).
 6. **Functional Annotation & Visualization:** Functional enrichment analyses using `fgsea` alongside publication-ready data plots (Volcano, Hierarchical Clustered Heatmaps).
 
-## 🚀 Technical Requirements
-To run this pipeline safely in a local or cloud-based RStudio environment, you will need **R (>= 4.4.1)** and the following primary library suites:
-
 ## ⚖️ Acknowledgments & License
 The core analytical logic and infrastructure used in this repository are heavily inspired by the public framework created for the study: *“A Meta-Analysis of the Converging Effects of Different Classes of Antipsychotics on the Frontal Cortex Transcriptome...”* ([raeedbhuiyan/Antipsychotic_Meta-Analysis](https://github.com)).
 
