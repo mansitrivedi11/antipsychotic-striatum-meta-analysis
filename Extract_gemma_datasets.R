@@ -31,9 +31,31 @@ extract_from_gemma <- function(rs_id, dataset, drug,
   # Pattern: contrast_XXXXXX_log2fc / _tstat / _pvalue
   fc_col <- grep("_log2fc$", colnames(de), value = TRUE)[1]
   t_col  <- grep("_tstat$",  colnames(de), value = TRUE)[1]
-  p_col  <- grep("^pvalue$", colnames(de), value = TRUE)[1]
+  contrast_id <- sub("_log2fc$", "", fc_col)
+  p_col       <- paste0(contrast_id, "_pvalue")
 
+  # Verify it exists, fall back to bare pvalue if not
+  if (!p_col %in% colnames(de)) {
+      p_col <- grep("^pvalue$", colnames(de), value = TRUE)[1]
+       message("  Note: using omnibus pvalue (contrast-specific not found)")
+   }
   message(sprintf("  Using: %s | %s | %s", fc_col, t_col, p_col))
+
+# Verify the column found matches our expected contrast
+  expected_contrast <- list(
+  "530218" = "contrast_150587",   # GSE67750 haloperidol
+  "543220" = "contrast_143536"    # GSE67723 risperidone
+  )
+
+  if (!is.null(expected_contrast[[as.character(rs_id)]])) {
+   expected_prefix <- expected_contrast[[as.character(rs_id)]]
+     if (!startsWith(fc_col, expected_prefix)) {
+        warning(sprintf(
+           "Expected contrast prefix '%s' but got column '%s' — verify this is correct",
+          expected_prefix, fc_col
+        ))
+     }
+  }
 
   # Build clean data frame, compute SV, collapse probes to genes
   de %>%
@@ -104,14 +126,14 @@ if (!is.null(raw_180473)) {
   message(sprintf("Retrieved %d rows", nrow(de_180473)))
   message("Columns: ", paste(colnames(de_180473), collapse = ", "))
 
-  extract_180473_contrast <- function(de, fc_col, t_col,
+  extract_180473_contrast <- function(de, fc_col, t_col, p_col,
                                        drug, drug_class) {
     de %>%
       transmute(
         gene_symbol = toupper(GeneSymbol),
         log2FC      = as.numeric(.data[[fc_col]]),
         t_stat      = as.numeric(.data[[t_col]]),
-        pvalue      = as.numeric(pvalue)
+        pvalue      = as.numeric(.data[[p_col]])
       ) %>%
       mutate(SE = log2FC / t_stat, SV = SE^2) %>%
       filter(
@@ -141,6 +163,7 @@ if (!is.null(raw_180473)) {
     de         = de_180473,
     fc_col     = "contrast_181985_log2fc",
     t_col      = "contrast_181985_tstat",
+    p_col      = "contrast_181985_pvalue",
     drug       = "risperidone",
     drug_class = "atypical"
   )
@@ -149,6 +172,7 @@ if (!is.null(raw_180473)) {
     de         = de_180473,
     fc_col     = "contrast_181986_log2fc",
     t_col      = "contrast_181986_tstat",
+    p_col      = "contrast_181986_pvalue",
     drug       = "olanzapine",
     drug_class = "atypical"
   )
@@ -183,5 +207,3 @@ message(sprintf("GSE67750  (haloperidol): %d genes", nrow(result_GSE67750)))
 message(sprintf("GSE67723  (risperidone): %d genes", nrow(result_GSE67723)))
 message(sprintf("GSE180473 (risperidone): %d genes", nrow(result_GSE180473_ris)))
 message(sprintf("GSE180473 (olanzapine):  %d genes", nrow(result_GSE180473_ola)))
-
-message("\nScript 05 complete -> run 06_build_master_dataset.R")
