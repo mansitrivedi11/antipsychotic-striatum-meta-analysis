@@ -1,4 +1,5 @@
-# contrast verification
+# Statistical provenance and contrast verification
+# Project: Antipsychotic striatum transcriptomics meta-analysis
 
 pkgs <- c("dplyr", "readr", "tibble")
 missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
@@ -9,7 +10,7 @@ if (length(missing) > 0) {
 library(dplyr)
 library(readr)
 
-# 1. Paths & input check 
+# 1. Paths & input validation 
 
 primary_file <- "data/processed/MASTER_primary_MGI_v2_harmonized.rds"
 report_dir <- "docs/statistical_validation"
@@ -24,7 +25,7 @@ primary <- readRDS(primary_file)
 cat("\n--- Script 06C: Statistical Provenance ---\n")
 cat("Observations:", nrow(primary), "| Datasets:", n_distinct(primary$dataset), "\n\n")
 
-# 2. Required columns 
+# 2. Required columns
 
 req_cols <- c(
   "dataset", "species", "drug", "contrast_id", "baseline",
@@ -39,23 +40,23 @@ if (length(missing_cols) > 0) {
 }
 
 # Helper to collapse unique metadata values cleanly
-collapse_unique <- function(x) {
+collapse_vals <- function(x) {
   paste(sort(unique(as.character(x))), collapse = "; ")
 }
 
 # 3. Contrast-level inventory 
-# One row per dataset, drug, and contrast (contrast IDs aren't unique across datasets)
+# One row per dataset, drug, and contrast
 
 contrast_inventory <- primary %>%
   group_by(dataset, species, drug, contrast_id) %>%
   summarise(
     n_genes = n_distinct(harmonized_mouse_gene_id, na.rm = TRUE),
     n_rows = n(),
-    platform = collapse_unique(platform),
-    baseline = collapse_unique(baseline),
-    vehicle_verified = collapse_unique(vehicle_verified),
-    treatment_duration = collapse_unique(treatment_duration),
-    variance_source = collapse_unique(variance_source),
+    platform = collapse_vals(platform),
+    baseline = collapse_vals(baseline),
+    vehicle_verified = collapse_vals(vehicle_verified),
+    treatment_duration = collapse_vals(treatment_duration),
+    variance_source = collapse_vals(variance_source),
     .groups = "drop"
   ) %>%
   arrange(dataset, drug)
@@ -64,8 +65,8 @@ cat("Contrast inventory:\n")
 print(contrast_inventory, n = Inf, width = Inf)
 write_csv(contrast_inventory, file.path(report_dir, "06C_contrast_inventory.csv"))
 
-# 4. Statistical provenance classification
-# Based on recorded metadata only; does not re-verify original DE scripts
+# 4. Statistical provenance classification 
+
 
 provenance_inventory <- contrast_inventory %>%
   mutate(
@@ -167,13 +168,14 @@ replication_summary <- tibble::tibble(
   )
 )
 
-cat("\nIndependent replication summary:\n")
+cat("\nIndependent replication:\n")
 print(replication_summary)
 
 write_csv(gene_replication, file.path(report_dir, "06C_gene_replication.csv"))
 write_csv(replication_summary, file.path(report_dir, "06C_gene_replication_summary.csv"))
 
 # 8. Cross-study effect-size distributions
+
 
 effect_distribution <- primary %>%
   group_by(dataset, drug, species) %>%
@@ -185,9 +187,92 @@ effect_distribution <- primary %>%
     median_SV = median(SV, na.rm = TRUE),
     fraction_positive = mean(log2FC > 0, na.rm = TRUE),
     .groups = "drop"
-  ) %>%
-  arrange(dataset, drug)
+  )
 
 cat("\nEffect-size distributions:\n")
 print(effect_distribution, n = Inf, width = Inf)
-write_csv(effect_distribution, file.path(report_dir, "06C_effect_distribution.csv"))
+write_csv(effect_distribution, file.path(report_dir, "06C_effect_size_distributions.csv"))
+
+# 9. Study-level heterogeneity inventory
+
+heterogeneity_inventory <- primary %>%
+  distinct(dataset, species, platform, treatment_duration, drug) %>%
+  group_by(dataset) %>%
+  summarise(
+    species = collapse_vals(species),
+    platform = collapse_vals(platform),
+    treatment_duration = collapse_vals(treatment_duration),
+    drugs = collapse_vals(drug),
+    .groups = "drop"
+  )
+
+cat("\nHeterogeneity inventory:\n")
+print(heterogeneity_inventory, n = Inf, width = Inf)
+write_csv(heterogeneity_inventory, file.path(report_dir, "06C_heterogeneity_inventory.csv"))
+
+# 10. Manual verification checklist 
+
+verification_checklist <- contrast_inventory %>%
+  transmute(
+    dataset,
+    drug,
+    contrast_id,
+    baseline_recorded = baseline,
+    variance_source_recorded = variance_source,
+    original_DE_method = NA_character_,
+    t_statistic_type = NA_character_,
+    original_SE_available = NA_character_,
+    contrast_numerator = NA_character_,
+    contrast_denominator = NA_character_,
+    control_group_identity = NA_character_,
+    shared_control_samples = NA_character_,
+    biological_replicates_confirmed = NA_character_,
+    source_reference = NA_character_,
+    verification_status = "PENDING"
+  )
+
+write_csv(verification_checklist, file.path(report_dir, "06C_manual_verification_checklist.csv"))
+
+cat("\nManual verification checklist:\n")
+verification_checklist %>%
+  dplyr::select(dataset, drug, contrast_id, verification_status) %>%
+  print(n = Inf)
+
+# 11. Statistical readiness summary 
+# PASS_FROM_06B refers to the prior audit step and is not re-verified here
+
+readiness <- tibble::tibble(
+  requirement = c(
+    "Numerical SE/SV consistency",
+    "Independent dataset replication evaluated",
+    "Original DE method verified",
+    "Ordinary sampling variance verified",
+    "Treatment-control direction verified",
+    "Shared-control dependence evaluated",
+    "Appropriate dependence-aware model selected"
+  ),
+  status = c(
+    "PASS_FROM_06B",
+    "PASS",
+    "PENDING",
+    "PENDING",
+    "PENDING",
+    "PENDING",
+    "PENDING"
+  )
+)
+
+cat("\nStatistical readiness:\n")
+print(readiness, n = Inf, width = Inf)
+write_csv(readiness, file.path(report_dir, "06C_statistical_readiness.csv"))
+
+# 12. Session info & wrap-up 
+
+writeLines(capture.output(sessionInfo()), file.path(report_dir, "06C_session_info.txt"))
+
+cat("\n--- Script 06C Completed ---\n")
+cat("Primary observations:", nrow(primary), "\n")
+cat("Independent datasets:", n_distinct(primary$dataset), "\n")
+cat("Drug contrasts:", nrow(contrast_inventory), "\n")
+cat("Reports saved in:", report_dir, "\n")
+cat("No master datasets were modified.\n")
